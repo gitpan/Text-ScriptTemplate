@@ -166,7 +166,7 @@ use strict;
 use vars qw($DEBUG $VERSION);
 
 $DEBUG   = 0;
-$VERSION = '0.06';
+$VERSION = '0.07';
 
 =item $tmpl = new Text::ScriptTemplate;
 
@@ -319,40 +319,40 @@ sub fill {
     my %opts = @_;
     my $from = $opts{PACKAGE} || caller;
     my $name;
-    my $eval;
 
     no strict;
 
-    ## dynamically create evaluation engine
+    ## determine package namespace to do the evaluation
     if (UNIVERSAL::isa($from, 'Safe')) {
         $name = $from->root;
-        $eval = sub { my $v = $from->reval($_[0]); $@ ? $@ : $v; }
     }
     else {
         $name = ref($from) || $from;
-        $eval = eval qq{
-            package $name; sub { my \$v = eval(\$_[0]); \$@ ? \$@ : \$v; };
-        };
     }
 
-    ## export stored data to target namespace
-    while (my($key, $val) = each %{$self->{hash}}) {
-        if ($DEBUG) {
-            print STDERR "Exporting to ${name}::${key}: $val\n";
-        }
-        $ {"${name}::${key}"} = $val;
-    }
+    ## export, parse, and evaluate
+    eval qq{package $name;} . q{
+	## export stored data to target namespace
+	while (my($key, $val) = each %{$self->{hash}}) {
+	    #print STDERR "Exporting to ${name}::${key}: $val\n";
+	    $ {"${key}"} = $val;
+	}
 
-    ## dynamically create handler for buffered or unbuffered mode
-    if ($ {"${name}::_OHANDLE"} = $opts{OHANDLE}) {
-        $eval->(q{$_handle = sub { print $_OHANDLE $_[0]; };});
-    }
-    else {
-        $eval->(q{$_handle = sub { $_OBUFFER .= $_[0]; };});
-    }
+	## create handler for buffered or unbuffered mode
+	if ($_OHANDLE = $opts{OHANDLE}) {
+	    $_handle = sub { print $_OHANDLE $_[0] };
+	}
+	else {
+	    $_handle = sub { $_OBUFFER .= $_[0] }
+	}
 
-    ##
-    $eval->(qq{ undef \$_OBUFFER; $self->{buff}; \$_OBUFFER; });
+	$_OBUFFER = '';
+    } . $self->{buff};
+
+    if ($@) {
+	return $@;
+    }
+    eval qq{package $name;} . q{$_OBUFFER};
 }
 
 =back
