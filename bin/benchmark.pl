@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# $Id$
+# $Id: benchmark.pl,v 1.1 2001/02/27 15:56:07 tai Exp $
 #
 # Simple script to compare speed of various template processor
 #

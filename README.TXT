@@ -1,24 +1,24 @@
 NAME
-     Text::ScriptTemplate - Lightweight processor for full-featured template
+     Text::ScriptTemplate - Standalone ASP/JSP/PHP-style template processor
 
 SYNOPSIS
      use Text::ScriptTemplate;
 
+     $text = <<'EOF';            # PHP/JSP/ASP-style template
+     <% for (1..3) { %>          # - any Perl expression is supported
+     Message is: <%= $TEXT %>.   # - also supports variable expansion
+     <% } %>
+     EOF
+
      $tmpl = new Text::ScriptTemplate;    # create processor object
      $tmpl->setq(TEXT => "hello, world"); # export data to template
-     $tmpl->load($file);                  # loads template from named file
-     $tmpl->pack(q{TEXT: <%= $TEXT; %>}); # loads template from in-memory data
 
-     print $tmpl->fill;                   # prints "TEXT: hello, world"
-
-     # load intermixed Perl script and text as a template
-     $tmpl->pack(q{<% for (1..3) { %>i = <%= "$_\n"; %><% } %>});
-
-     print $tmpl->fill;                   # prints "i = 1\ni = 2\ni = 3\n"
+     # load, fill, and print expanded result in single action
+     print $tmpl->pack($text)->fill;
 
 DESCRIPTION
-    This is a varient of Text::SimpleTemplate, a module for template-based
-    text generation.
+    This is a successor of Text::SimpleTemplate, a module for template-
+    based text generation.
 
     Template-based text generation is a way to separate program code and
     data, so non-programmer can control final result (like HTML) as desired
@@ -33,12 +33,12 @@ DESCRIPTION
     be intermixed closely.
 
     Major goal of this library is to provide support of powerful PHP-style
-    template with smaller resource. This is useful when PHP, HTML::Embperl,
-    or Apache::ASP is overkill, but their template style is still desired.
+    template with smaller resource. This is useful when PHP, Java/JSP, or
+    Apache::ASP is overkill, but their template style is still desired.
 
 INSTALLATION / REQUIREMENTS
-    This module requires Carp.pm and FileHandle.pm. Since these are standard
-    modules, all you need is perl itself.
+    No other module is needed to use this module. All you need is perl
+    itself.
 
     For installation, standard procedure of
 
@@ -50,17 +50,32 @@ INSTALLATION / REQUIREMENTS
     should work just fine.
 
 TEMPLATE SYNTAX AND USAGE
-    Any block of text surrounded by '<%' and '%>' will be handled specially
-    by template processor.
+    Any block surrounded by '<%=' and '%>' will be replaced with its
+    evaluated result. So,
 
-    For block surrounded by '<%=' and '%>, it will be taken as simple perl
-    expression, and will be replace by its evaluated result.
+      <%= $message %>
 
-    For block surrounded by '<%' and '%>, it will be taken as part of
-    control structure, and after all parts are merged into one big block, it
-    will be evaluated and the result will be handled as output.
+    will expand to "hello" if $message variable contains "hello" at the time
+    of evaluation (when "fill" method is called).
 
-    Suppose you have a following template named "sample.tmpl":
+    For block surrounded by '<%' and '%>, it will be taken as a part of
+    control structure. After all parts are merged into one big script, it
+    get evaluated and its result will become expanded result. This means,
+
+      <% for my $i (1..3) { %>
+      i = <%= %i %>
+      <% } %>
+
+    will generate
+
+      i = 1
+      i = 2
+      i = 3
+
+    as a resulting output.
+
+    Now, let's continue with more practical example. Suppose you have a
+    following template named "sample.tmpl":
 
         === Module Information ===
         <% if ($HAS->{Text::ScriptTemplate}) { %>
@@ -71,7 +86,9 @@ TEMPLATE SYNTAX AND USAGE
         Text::ScriptTemplate is not installed.
         <% } %>
 
-    With the following code...
+    With the following script...
+
+        #!/usr/bin/perl
 
         use Safe;
         use Text::ScriptTemplate;
@@ -81,7 +98,7 @@ TEMPLATE SYNTAX AND USAGE
             Name        => "Text::ScriptTemplate",
             Description => "Lightweight processor for full-featured template",
             Author      => "Taisuke Yamada",
-            Email       => "tai\@imasy.or.jp",
+            Email       => "tyamadajp\@spam.rakugaki.org",
         });
         $tmpl->setq(HAS => { Text::ScriptTemplate => 1 }); # installed
         $tmpl->load("sample.tmpl");
@@ -94,7 +111,7 @@ TEMPLATE SYNTAX AND USAGE
 
         Name: Text::ScriptTemplate
         Description: Lightweight processor for full-featured template
-        Author: Taisuke Yamada <tai@imasy.or.jp>
+        Author: Taisuke Yamada <tyamadajp@spam.rakugaki.org>
 
     If you change
 
@@ -104,13 +121,13 @@ TEMPLATE SYNTAX AND USAGE
 
         $tmpl->setq(HAS => { Text::ScriptTemplate => 0 }); # not installed
 
-    then you will get
+    , then you will get
 
         === Module Information ===
 
         Text::ScriptTemplate is not installed.
 
-    You can embed any control strucure as long as intermixed text block is
+    You can embed any control structure as long as intermixed text block is
     surround by set of braces. This means
 
         hello world<% if ($firsttime); %>
@@ -119,24 +136,31 @@ TEMPLATE SYNTAX AND USAGE
 
         <% do { %>hello world<% } if ($firsttime); %>
 
-    If you want to know more on this, please read TEMPLATE INTERNAL section
-    for the detail.
+    to ensure surrounding block. If you want to know more on this internal,
+    please read TEMPLATE INTERNAL section for the detail.
 
     Also, as you might have noticed, any scalar data can be exported to
     template namespace, even hash reference or code reference.
 
-    Finally, although I used "Safe" module in example above, this is not a
-    requirement. However, if you want to control power of the template
-    editor over program logic, its use is strongly recommended (see the Safe
-    manpage for more).
+    Finally, although I had used "Safe" module in example above, this is not
+    a requirement. Either of
+
+        print $tmpl->fill(PACKAGE => new Safe);
+        print $tmpl->fill(PACKAGE => new MyPackage);
+        print $tmpl->fill(PACKAGE => 'MyOtherPackage');
+        print $tmpl->fill; # uses calling context as package namespace
+
+    will work. However, if you want to limit priviledge of program logic
+    embedded in template, using Safe module as sandbox is recommended.
 
 RESERVED NAMES
     Since template can be evaluated in separate namespace, this module does
     not have much restriction on variable or function name you define in
     theory.
 
-    However, due to internal structure of this module, please consider all
-    names starting with "_" (underscore) as reserved for internal usage.
+    Currently reserved names are $self, and any other names starting with
+    "_" (underscore). $self refers to instance of this module, and can be
+    used to include sub-template in current template (see "include" method).
 
 METHODS
     Following methods are currently available.
@@ -151,9 +175,10 @@ METHODS
 
     $tmpl->setq($name => $data, $name => $data, ...);
         Exports scalar data ($data) to template namespace, with $name as a
-        scalar variable name to be used in template.
+        scalar variable name to be used in template. You can repeat the pair
+        to export multiple sets in one operation.
 
-        You can repeat the pair to export multiple sets in one operation.
+        Returns object reference to itself.
 
     $tmpl->load($file, %opts);
         Loads template file ($file) for later evaluation. File can be
@@ -184,6 +209,7 @@ METHODS
             $tmpl->fill(PACKAGE => new Safe);
             $tmpl->fill(PACKAGE => new Some::Module);
             $tmpl->fill(PACKAGE => 'Some::Package');
+            $tmpl->fill; # uses calling context as evaluating namespace
 
         works. In case Safe module (or its subclass) was passed, its "reval"
         method will be used instead of built-in eval.
@@ -196,6 +222,18 @@ METHODS
             $tmpl->fill(OHANDLE => new FileHandle(...));
 
         is supported.
+
+    $text = $tmpl->include($file, \%vars, @args);
+        This is a shortcut of doing
+
+          $text = $tmpl->new->load($file)->setq(%vars)->fill(@args);
+
+        Why a shortcut? Because this will allow you to write
+
+          <%= $self->include("subtemplate.tmpl") %>
+
+        which is much (visually) cleaner way to include other template
+        fragment in current template.
 
 TEMPLATE INTERNAL
     Internally, template processor converts template into one big perl
@@ -222,19 +260,27 @@ TEMPLATE INTERNAL
     its argument.
 
 NOTES / BUGS
-    Nested template delimiter will cause this module to fail.
+    Nested template delimiter will cause this module to fail. In another
+    word, don't do something like
+
+      <%= "<%=" %>
+
+    as it'll fail template parsing engine.
 
 SEE ALSO
-    the Safe manpage and the Text::SimpleTemplate manpage
+    Safe and Text::SimpleTemplate
 
 CONTACT ADDRESS
-    Please send any bug reports/comments to <tai@imasy.or.jp>.
+    Please send any bug reports/comments to <tyamadajp@spam.rakugaki.org>.
+
+    NOTE: You need to replace "spam" to "list" in above email address before
+    sending.
 
 AUTHORS / CONTRIBUTORS
-     - Taisuke Yamada <tai@imasy.or.jp>
+     - Taisuke Yamada <tyamadajp@spam.rakugaki.org>
 
 COPYRIGHT
-    Copyright 2001. All rights reserved.
+    Copyright 2001-2004. All rights reserved.
 
     This library is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself.

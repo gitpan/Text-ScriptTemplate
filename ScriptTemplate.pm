@@ -4,28 +4,28 @@ package Text::ScriptTemplate;
 
 =head1 NAME
 
- Text::ScriptTemplate - Lightweight processor for full-featured template
+ Text::ScriptTemplate - Standalone ASP/JSP/PHP-style template processor
 
 =head1 SYNOPSIS
 
  use Text::ScriptTemplate;
 
+ $text = <<'EOF';            # PHP/JSP/ASP-style template
+ <% for (1..3) { %>          # - any Perl expression is supported
+ Message is: <%= $TEXT %>.   # - also supports variable expansion
+ <% } %>
+ EOF
+
  $tmpl = new Text::ScriptTemplate;    # create processor object
  $tmpl->setq(TEXT => "hello, world"); # export data to template
- $tmpl->load($file);                  # loads template from named file
- $tmpl->pack(q{TEXT: <%= $TEXT; %>}); # loads template from in-memory data
 
- print $tmpl->fill;                   # prints "TEXT: hello, world"
-
- # load intermixed Perl script and text as a template
- $tmpl->pack(q{<% for (1..3) { %>i = <%= "$_\n"; %><% } %>});
-
- print $tmpl->fill;                   # prints "i = 1\ni = 2\ni = 3\n"
+ # load, fill, and print expanded result in single action
+ print $tmpl->pack($text)->fill;
 
 =head1 DESCRIPTION
 
-This is a varient of Text::SimpleTemplate, a module for template-based
-text generation.
+This is a successor of Text::SimpleTemplate, a module for template-
+based text generation.
 
 Template-based text generation is a way to separate program code and
 data, so non-programmer can control final result (like HTML) as desired
@@ -40,13 +40,13 @@ template processing engine. With this module, Perl script and text
 can be intermixed closely.
 
 Major goal of this library is to provide support of powerful PHP-style
-template with smaller resource. This is useful when PHP, HTML::Embperl,
+template with smaller resource. This is useful when PHP, Java/JSP,
 or Apache::ASP is overkill, but their template style is still desired.
 
 =head1 INSTALLATION / REQUIREMENTS
 
-This module requires Carp.pm and FileHandle.pm.
-Since these are standard modules, all you need is perl itself.
+No other module is needed to use this module.
+All you need is perl itself.
 
 For installation, standard procedure of
 
@@ -59,18 +59,32 @@ should work just fine.
 
 =head1 TEMPLATE SYNTAX AND USAGE
 
-Any block of text surrounded by '<%' and '%>' will be handled
-specially by template processor.
+Any block surrounded by '<%=' and '%>' will be replaced with
+its evaluated result. So,
 
-For block surrounded by '<%=' and '%>, it will be taken as
-simple perl expression, and will be replace by its evaluated
-result.
+  <%= $message %>
 
-For block surrounded by '<%' and '%>, it will be taken as
-part of control structure, and after all parts are merged
-into one big block, it will be evaluated and the result
-will be handled as output.
+will expand to "hello" if $message variable contains "hello"
+at the time of evaluation (when "fill" method is called).
 
+For block surrounded by '<%' and '%>, it will be taken as a
+part of control structure. After all parts are merged into
+one big script, it get evaluated and its result will become
+expanded result. This means,
+
+  <% for my $i (1..3) { %>
+  i = <%= %i %>
+  <% } %>
+
+will generate
+
+  i = 1
+  i = 2
+  i = 3
+
+as a resulting output.
+
+Now, let's continue with more practical example.
 Suppose you have a following template named "sample.tmpl":
 
     === Module Information ===
@@ -82,7 +96,9 @@ Suppose you have a following template named "sample.tmpl":
     Text::ScriptTemplate is not installed.
     <% } %>
 
-With the following code...
+With the following script...
+
+    #!/usr/bin/perl
 
     use Safe;
     use Text::ScriptTemplate;
@@ -92,7 +108,7 @@ With the following code...
         Name        => "Text::ScriptTemplate",
         Description => "Lightweight processor for full-featured template",
         Author      => "Taisuke Yamada",
-        Email       => "tai\@imasy.or.jp",
+        Email       => "tyamadajp\@spam.rakugaki.org",
     });
     $tmpl->setq(HAS => { Text::ScriptTemplate => 1 }); # installed
     $tmpl->load("sample.tmpl");
@@ -105,7 +121,7 @@ With the following code...
 
     Name: Text::ScriptTemplate
     Description: Lightweight processor for full-featured template
-    Author: Taisuke Yamada <tai@imasy.or.jp>
+    Author: Taisuke Yamada <tyamadajp@spam.rakugaki.org>
 
 If you change
 
@@ -115,13 +131,13 @@ to
 
     $tmpl->setq(HAS => { Text::ScriptTemplate => 0 }); # not installed
 
-then you will get
+, then you will get
 
     === Module Information ===
 
     Text::ScriptTemplate is not installed.
 
-You can embed any control strucure as long as intermixed text
+You can embed any control structure as long as intermixed text
 block is surround by set of braces. This means
 
     hello world<% if ($firsttime); %>
@@ -130,26 +146,41 @@ must be written as
 
     <% do { %>hello world<% } if ($firsttime); %>
 
-If you want to know more on this, please read TEMPLATE
-INTERNAL section for the detail.
+to ensure surrounding block. If you want to know more on this
+internal, please read TEMPLATE INTERNAL section for the detail.
 
 Also, as you might have noticed, any scalar data can be exported
 to template namespace, even hash reference or code reference.
 
-Finally, although I used "Safe" module in example above, this is not
-a requirement. However, if you want to control power of the template
-editor over program logic, its use is strongly recommended (see the Safe
-manpage for more).
+Finally, although I had used "Safe" module in example above,
+this is not a requirement. Either of
+
+    print $tmpl->fill(PACKAGE => new Safe);
+    print $tmpl->fill(PACKAGE => new MyPackage);
+    print $tmpl->fill(PACKAGE => 'MyOtherPackage');
+    print $tmpl->fill; # uses calling context as package namespace
+
+will work. However, if you want to limit priviledge of program
+logic embedded in template, using Safe module as sandbox is
+recommended.
 
 =head1 RESERVED NAMES
 
-Since template can be evaluated in separate namespace, this
-module does not have much restriction on variable or function
-name you define in theory.
+Currently, only reserved name pattern is the one starting
+with "_" (underscore).
 
-However, due to internal structure of this module, please
-consider all names starting with "_" (underscore) as reserved
-for internal usage.
+Since template can be evaluated in separate namespace using
+PACKAGE option (see "fill" method), this module does not have
+much restriction on variable or function name you define in
+theory. However, if you choose existing module namespace
+as evaluating namespace, there could be some other predefined
+names that may interfere with the symbols you have exported.
+
+Also, if you don't specify PACKAGE option, namespace of
+calling context is used as default namespace. This means
+all defined functions and variables in calling script
+are visible from template, even if they weren't exported
+by "setq" method.
 
 =head1 METHODS
 
@@ -166,7 +197,7 @@ use strict;
 use vars qw($DEBUG $VERSION);
 
 $DEBUG   = 0;
-$VERSION = '0.07';
+$VERSION = '0.08';
 
 =item $tmpl = new Text::ScriptTemplate;
 
@@ -195,8 +226,9 @@ sub new {
 
 Exports scalar data ($data) to template namespace,
 with $name as a scalar variable name to be used in template.
-
 You can repeat the pair to export multiple sets in one operation.
+
+Returns object reference to itself.
 
 =cut
 sub setq {
@@ -206,6 +238,7 @@ sub setq {
     while (my($key, $val) = each %pair) {
         $self->{hash}->{$key} = $val;
     }
+    $self;
 }
 
 =item $tmpl->load($file, %opts);
@@ -299,6 +332,7 @@ the package, or the package object itself. So either of
     $tmpl->fill(PACKAGE => new Safe);
     $tmpl->fill(PACKAGE => new Some::Module);
     $tmpl->fill(PACKAGE => 'Some::Package');
+    $tmpl->fill; # uses calling context as evaluating namespace
 
 works. In case Safe module (or its subclass) was passed,
 its "reval" method will be used instead of built-in eval.
@@ -319,40 +353,65 @@ sub fill {
     my %opts = @_;
     my $from = $opts{PACKAGE} || caller;
     my $name;
+    my $eval;
 
     no strict;
 
-    ## determine package namespace to do the evaluation
+    ## dynamically create evaluation engine
     if (UNIVERSAL::isa($from, 'Safe')) {
         $name = $from->root;
+        $eval = sub { my $v = $from->reval($_[0]); $@ ? $@ : $v; }
     }
     else {
         $name = ref($from) || $from;
+        $eval = eval qq{
+            package $name; sub { my \$v = eval(\$_[0]); \$@ ? \$@ : \$v; };
+        };
     }
 
-    ## export, parse, and evaluate
-    eval qq{package $name;} . q{
-	## export stored data to target namespace
-	while (my($key, $val) = each %{$self->{hash}}) {
-	    #print STDERR "Exporting to ${name}::${key}: $val\n";
-	    $ {"${key}"} = $val;
-	}
-
-	## create handler for buffered or unbuffered mode
-	if ($_OHANDLE = $opts{OHANDLE}) {
-	    $_handle = sub { print $_OHANDLE $_[0] };
-	}
-	else {
-	    $_handle = sub { $_OBUFFER .= $_[0] }
-	}
-
-	$_OBUFFER = '';
-    } . $self->{buff};
-
-    if ($@) {
-	return $@;
+    ## export stored data to target namespace
+    while (my($key, $val) = each %{$self->{hash}}) {
+        if ($DEBUG) {
+            print STDERR "Exporting to ${name}::${key}: $val\n";
+        }
+        $ {"${name}::${key}"} = $val;
     }
-    eval qq{package $name;} . q{$_OBUFFER};
+
+    ## dynamically create handler for buffered or unbuffered mode
+    if ($ {"${name}::_OHANDLE"} = $opts{OHANDLE}) {
+        $eval->(q{$_handle = sub { print $_OHANDLE $_[0]; };});
+    }
+    else {
+        $eval->(q{$_handle = sub { $_OBUFFER .= $_[0]; };});
+    }
+
+    ##
+    $eval->(qq{ undef \$_OBUFFER; $self->{buff}; \$_OBUFFER; });
+}
+
+=item $text = $tmpl->include($file, \%vars, @args);
+
+This is a shortcut of doing
+
+  $text = $tmpl->new->load($file)->setq(%vars)->fill(@args);
+
+Why a shortcut? Because this will allow you to write
+
+  <%= $tmpl->include("subtemplate.tmpl") %>
+
+which is much (visually) cleaner way to include other
+template fragment in current template.
+
+Note: you need to export instance as $tmpl beforehand
+in above example.
+
+=cut
+sub include {
+    my $self = shift;
+    my $file = shift;
+    my $vars = shift || {};
+
+    $self->new->load($file)->setq(%{$vars})->fill(@_);
 }
 
 =back
@@ -385,6 +444,11 @@ either print or buffer its argument.
 =head1 NOTES / BUGS
 
 Nested template delimiter will cause this module to fail.
+In another word, don't do something like
+
+  <%= "<%=" %>
+
+as it'll fail template parsing engine.
 
 =head1 SEE ALSO
 
@@ -392,15 +456,18 @@ L<Safe> and L<Text::SimpleTemplate>
 
 =head1 CONTACT ADDRESS
 
-Please send any bug reports/comments to <tai@imasy.or.jp>.
+Please send any bug reports/comments to <tyamadajp@spam.rakugaki.org>.
+
+NOTE: You need to replace "spam" to "list" in above email address
+      before sending.
 
 =head1 AUTHORS / CONTRIBUTORS
 
- - Taisuke Yamada <tai@imasy.or.jp>
+ - Taisuke Yamada <tyamadajp@spam.rakugaki.org>
 
 =head1 COPYRIGHT
 
-Copyright 2001. All rights reserved.
+Copyright 2001-2004. All rights reserved.
 
 This library is free software; you can redistribute it
 and/or modify it under the same terms as Perl itself.

@@ -3,11 +3,13 @@
 
 plan
 - reduce buffer copying overhead
-- review inheritance design of "new" constructor.
-- more speed/efficiency
+- more code reduction
+- may incorporate code caching method for speedup
 
 0.07
-- Updated to prevent wierd segmentation fault in recent perl (5.6.x).
+- added "include" method
+- now "setq" method returns self object reference
+- documentation update
 
 0.06
 - complete documentation update
