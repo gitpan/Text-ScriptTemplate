@@ -1,0 +1,15 @@
+
+=== ChangeLog and Future Plans ===
+
+plan
+- reduce buffer copying overhead
+- review inheritance design of "new" constructor.
+- more speed/efficiency
+
+0.06
+- complete documentation update
+- added benchmark script for performance checking
+- fixed bug that caused \ (backslash) to disappear
+
+0.05
+- initial version based on Text::SimpleTemplate
